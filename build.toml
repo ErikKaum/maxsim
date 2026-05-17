@@ -1,0 +1,34 @@
+[general]
+name = "maxsim"
+license = "Apache-2.0"
+backends = [
+  "cuda",
+  "metal",
+]
+version = 1
+
+[general.hub]
+repo-id = "erikkaum/maxsim"
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h",
+]
+
+[kernel.maxsim]
+backend = "cuda"
+depends = ["torch"]
+src = ["maxsim_cuda/maxsim.cu"]
+# Kernel targets Ampere+: uses bf16 WMMA (sm_80) and 16×16×16 mma.sync.
+# Pre-sm_80 arches don't have bf16 fragments, so we drop them. sm_90+PTX
+# lets future GPUs JIT from PTX without re-building.
+cuda-capabilities = ["8.0", "8.6", "8.9", "9.0+PTX"]
+
+[kernel.maxsim_metal]
+backend = "metal"
+depends = ["torch"]
+src = [
+  "maxsim_metal/maxsim.mm",
+  "maxsim_metal/maxsim.metal",
+]
