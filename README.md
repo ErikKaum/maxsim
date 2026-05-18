@@ -125,5 +125,5 @@ kernels benchmark erikkaum/maxsim
 ## Source / contribute
 
 Source: <https://github.com/erikkaum/maxsim>.
-
+Kernel repo: <https://huggingface.co/kernels/erikkaum/maxsim>.
 License: Apache-2.0.
