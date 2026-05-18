@@ -1,11 +1,6 @@
----
-library_name: kernels
-license: Apache-2.0
----
-
 ![maxsim](assets/maxsim.png)
 
-# maxsim
+# MaxSim
 
 A fast, memory-efficient exact MaxSim kernel for late-interaction
 retrieval and reranking (PyLate / ColBERT-style), packaged as a
