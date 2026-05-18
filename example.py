@@ -14,7 +14,6 @@ kernel, and compares against the pure PyTorch reference.
 """
 
 import platform
-from pathlib import Path
 
 import kernels
 import torch
