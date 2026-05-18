@@ -7,7 +7,7 @@
 # ]
 # ///
 
-"""End-to-end smoke test for the locally-built MaxSim kernel.
+"""End-to-end example for the testing MaxSim kernel.
 
 Builds two tiny query/document segments, scores one pair through the
 kernel, and compares against the pure PyTorch reference.
@@ -32,10 +32,11 @@ def main() -> None:
     device = pick_device()
     print(f"Using device: {device}")
 
-    kernel = kernels.get_local_kernel(Path("build"))
+    kernel = kernels.get_kernel("erikkaum/maxsim", version=1)
 
     torch.manual_seed(0)
     dim = 64
+
     # Two queries (lengths 3 and 5) and three documents (lengths 6, 10, 8).
     queries = torch.randn(3 + 5, dim, device=device, dtype=torch.float32)
     query_offsets = torch.tensor([0, 3, 8], dtype=torch.int32, device=device)

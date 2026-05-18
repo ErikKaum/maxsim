@@ -117,8 +117,10 @@ kernels benchmark erikkaum/maxsim
 - Hopper (sm_90) is supported via PTX forward-compat but doesn't yet
   use WGMMA — Ampere/Lovelace gets the best tuning.
 
-## Source / contribute
+## Source 
 
 Source: <https://github.com/erikkaum/maxsim>.
+
 Kernel repo: <https://huggingface.co/kernels/erikkaum/maxsim>.
+
 License: Apache-2.0.
