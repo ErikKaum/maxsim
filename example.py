@@ -2,18 +2,18 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "kernels",
-#     "numpy",
 #     "torch",
 # ]
 # ///
 
-"""End-to-end example for the testing MaxSim kernel.
+"""End-to-end example for the MaxSim kernel.
 
-Builds two tiny query/document segments, scores one pair through the
+Builds two tiny query/document segments, scores four pairs through the
 kernel, and compares against the pure PyTorch reference.
 """
 
 import platform
+import sys
 
 import kernels
 import torch
@@ -24,14 +24,19 @@ def pick_device() -> torch.device:
         return torch.device("mps")
     if torch.cuda.is_available():
         return torch.device("cuda")
-    return torch.device("cpu")
+    print(
+        "ERROR: maxsim has no CPU backend; need an Apple Silicon Mac (MPS) "
+        "or an NVIDIA GPU (CUDA sm_80+).",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def main() -> None:
     device = pick_device()
     print(f"Using device: {device}")
 
-    kernel = kernels.get_kernel("erikkaum/maxsim", version=1)
+    kernel = kernels.get_kernel("erikkaum/maxsim", version=1, trust_remote_code=True)
 
     torch.manual_seed(0)
     dim = 64

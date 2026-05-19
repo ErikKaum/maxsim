@@ -35,7 +35,7 @@ the common batched-reranking case.
 import torch
 from kernels import get_kernel
 
-maxsim = get_kernel("erikkaum/maxsim", version=1)
+maxsim = get_kernel("erikkaum/maxsim", version=1, trust_remote_code=True)
 
 scores = maxsim.score_pairs_packed(
     queries,           # [total_q_tokens, dim]
