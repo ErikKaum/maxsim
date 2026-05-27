@@ -407,26 +407,7 @@ retained backward state.**
 | fp16  |    0.261 ms |   2.697 ms | **10.33×** |     12.86× |     1.27× |           1/80 |
 | bf16  |    0.272 ms |   2.704 ms |  **9.94×** |     12.22× |     1.27× |           1/80 |
 
-`NVIDIA H200` (PTX-JIT). Run-to-run spread over 3 repeats: 0.33× (bf16), 1.20×
-(fp16). The fp16 step is noisier at this small grid on Hopper. Raw JSON
-artifact: [`bench_results/v2/h200.json`](./bench_results/v2/h200.json).
-
-The backward speedup is the load-bearing one — training is backward-dominated,
-and that's where the kernel's argmax-only save pays off:
-
-```text
-naive contrastive backward:  [Nq, Nb, Lq, Ld] fp32 similarities
-maxsim contrastive backward: [Nq, Nb, Lq]     int32 argmax
-maxsim retained state = 1/Ld of naive
-```
-
-|   Ld | naive retained | maxsim retained | maxsim / naive |
-| ---: | -------------: | --------------: | -------------: |
-|   80 |        10.5 MB |         0.13 MB |           1/80 |
-|  128 |        16.8 MB |         0.13 MB |          1/128 |
-|  256 |        33.6 MB |         0.13 MB |          1/256 |
-|  512 |        67.1 MB |         0.13 MB |          1/512 |
-| 1024 |       134.2 MB |         0.13 MB |         1/1024 |
+Raw JSON artifact: [`bench_results/v2/h200.json`](./bench_results/v2/h200.json).
 
 ### Cross-Device Contrastive fp16
 
