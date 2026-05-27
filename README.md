@@ -506,6 +506,23 @@ shows `—`.
 
 <!-- BENCH:full-matrix-metal -->
 
+| Surface | Preset | Shape | dtype | maxsim | PyTorch | speedup | padded | bwd× | peak× | retained state |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | fp16 | 0.925 ms | 4.945 ms | 5.34× | — | — | — | 1/80 |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | bf16 | 0.863 ms | 4.738 ms | 5.49× | — | — | — | 1/80 |
+| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | fp16 | 2.471 ms | 15.966 ms | 6.46× | — | 61.52× | — | 1/512 |
+| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | bf16 | 2.455 ms | 15.830 ms | 6.45× | — | 46.16× | — | 1/512 |
+| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | fp16 | 2.501 ms | 15.527 ms | 6.21× | — | 56.26× | — | 1/128 |
+| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | bf16 | 2.485 ms | 15.485 ms | 6.23× | — | 71.39× | — | 1/128 |
+| padded_infer | Rerank | `B=32, K=50, Lq=32, Ld=180, D=128` | fp16 | 1.693 ms | 6.229 ms | 3.68× | — | — | — | — |
+| padded_infer | Rerank | `B=32, K=50, Lq=32, Ld=180, D=128` | bf16 | 1.688 ms | 5.867 ms | 3.48× | — | — | — | — |
+| padded_infer | HeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | fp16 | 3.255 ms | 16.490 ms | 5.07× | — | — | — | — |
+| padded_infer | HeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | bf16 | 3.311 ms | 16.440 ms | 4.96× | — | — | — | — |
+| packed_infer | PackedRerank | `B=32, K=50, Lq=32, Ld=180, D=128` | fp16 | 2.529 ms | 5.897 ms | 2.33× | 1.697 ms | — | — | — |
+| packed_infer | PackedRerank | `B=32, K=50, Lq=32, Ld=180, D=128` | bf16 | 2.566 ms | 6.085 ms | 2.37× | 1.686 ms | — | — | — |
+| packed_infer | PackedHeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | fp16 | 4.335 ms | 16.524 ms | 3.81× | 3.324 ms | — | — | — |
+| packed_infer | PackedHeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | bf16 | 4.306 ms | 16.533 ms | 3.84× | 3.273 ms | — | — | — |
+
 <!-- /BENCH -->
 
 ### Reproducing
