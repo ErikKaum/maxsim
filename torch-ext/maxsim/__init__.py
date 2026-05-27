@@ -1,11 +1,18 @@
 """Thin Python wrapper around the compiled MaxSim kernel.
 
-This module exposes:
+Three scoring surfaces, each with an inference function, a ``_with_argmax``
+variant (also returns the winning document-token index per query token), and a
+``_train`` variant wired into PyTorch autograd:
 
-* :func:`score_pairs_packed` -- the lowest-level, kernel-facing packed API.
-* :func:`score_candidates_padded` -- an ergonomic padded API that reads
-  ``[B, Lq, D]`` / ``[B, C, Ld, D]`` inputs directly.
-* :func:`maxsim_reference` -- a pure-PyTorch reference for tests / benchmarks.
+* :func:`score_candidates_padded` -- padded reranking. Reads ``[B, Lq, D]``
+  queries and ``[B, K, Ld, D]`` candidates directly; the common inference path.
+* :func:`score_contrastive` -- all-pairs ``[Nq, Nb]`` scoring with packed
+  documents; what in-batch contrastive training losses consume.
+* :func:`score_pairs_packed` -- the lowest-level, kernel-facing API over
+  arbitrary ``(query, document)`` pair grids on ragged inputs.
+
+Pure-PyTorch references (:func:`maxsim_reference`, ``score_*_reference``) are
+also exported for tests and benchmarks.
 """
 
 from __future__ import annotations

@@ -113,9 +113,20 @@ cuda-test-packaged flavor="a100-large" image=cuda_full_test_image: cuda-sync
 # ---------------------------------------------------------------------------
 # Benchmarks.
 #
-# The benchmark runner writes JSON artifacts under bench_results/v2/. The
-# renderer is the only thing that edits README.md tables.
+# Two systems:
+#   * benchmarks/benchmark.py -- the `kernels benchmark` CLI format (per-kernel
+#     timing table); `just benchmark` (Hub) and `just bench-local` (./build).
+#   * scripts/cuda_bench_matrix.py -- the README-number generator; writes JSON
+#     under bench_results/v2/, and `just bench-render` rewrites the README.
 # ---------------------------------------------------------------------------
+
+# Run the kernels-CLI benchmark suite against the published Hub kernel.
+benchmark *args:
+    nix develop .#test -c kernels benchmark {{repo_id}} {{args}}
+
+# Run benchmarks/benchmark.py against the locally built ./build kernel.
+bench-local *args:
+    nix develop .#test -c python benchmarks/run_local.py {{args}}
 
 # Render README.md benchmark tables from bench_results/v2/*.json.
 bench-render:

@@ -16,7 +16,7 @@
 
 A fast, memory-efficient exact MaxSim kernel for ColBERT-style late-interaction
 retrieval and training. It's a drop-in replacement for PyTorch's MaxSim that's
-**14× faster** in training and saves **98% of the backward memory**.
+**~10× faster** in training and saves **98% of the backward memory**.
 [See benchmarks.](#benchmarks)
 
 The kernel is packaged as a
@@ -273,7 +273,8 @@ And sort them to get the reranked order
 reranked_ids = scores.argsort(dim=1, descending=True)
 ```
 
-For typical shapes (B=32, K=50), this is ~3–7× faster than PyTorch einsum+max.
+For B=32, this runs ~1.2–3× faster than PyTorch einsum+max at K=50 and ~2.5–5×
+at K=100. The padded kernel's advantage grows with the candidate count K.
 [See Benchmarks.](#benchmarks)
 
 ## Reference
@@ -395,20 +396,20 @@ is a straightforward PyTorch implementation that uses `torch.einsum` to
 materialise the full similarity tensor before `max`. Raw outputs are committed
 under [`bench_results/v2/`](./bench_results/v2/).
 
-### ColBERT training on A100
+### ColBERT training on H200
 
 The headline workload uses a common ColBERT-style in-batch contrastive shape:
-`Nq=Nb=32, Lq=32, Ld=80, dim=128`. **10.3× faster training step, with 1/80th the
+`Nq=Nb=32, Lq=32, Ld=80, dim=128`. **~10× faster training step, with 1/80th the
 retained backward state.**
 
 | dtype | maxsim step | naive step | full step× | bwd alone× | peak mem× | retained state |
 | ----- | ----------: | ---------: | ---------: | ---------: | --------: | -------------: |
-| fp16  |    0.337 ms |   3.477 ms | **10.31×** |     16.62× |     1.78× |           1/80 |
-| bf16  |    0.334 ms |   3.464 ms | **10.37×** |     16.84× |     1.78× |           1/80 |
+| fp16  |    0.261 ms |   2.697 ms | **10.33×** |     12.86× |     1.27× |           1/80 |
+| bf16  |    0.272 ms |   2.704 ms |  **9.94×** |     12.22× |     1.27× |           1/80 |
 
-`NVIDIA A100-SXM4-80GB` (`sm_80`, Torch 2.6.0 + CUDA 12.4). Run-to-run spread
-over 3 repeats: ≤0.31× on the contrastive workloads. Raw JSON artifact:
-[`bench_results/v2/a100-sxm4-80gb.json`](./bench_results/v2/a100-sxm4-80gb.json).
+`NVIDIA H200` (PTX-JIT). Run-to-run spread over 3 repeats: 0.33× (bf16), 1.20× (fp16). The fp16
+step is noisier at this small grid on Hopper. Raw JSON artifact:
+[`bench_results/v2/h200.json`](./bench_results/v2/h200.json).
 
 The backward speedup is the load-bearing one — training is backward-dominated,
 and that's where the kernel's argmax-only save pays off:
@@ -421,7 +422,7 @@ maxsim retained state = 1/Ld of naive
 
 |   Ld | naive retained | maxsim retained | maxsim / naive |
 | ---: | -------------: | --------------: | -------------: |
-|   75 |         9.8 MB |         0.13 MB |           1/75 |
+|   80 |        10.5 MB |         0.13 MB |           1/80 |
 |  128 |        16.8 MB |         0.13 MB |          1/128 |
 |  256 |        33.6 MB |         0.13 MB |          1/256 |
 |  512 |        67.1 MB |         0.13 MB |          1/512 |
@@ -434,27 +435,61 @@ This table is rendered from the GPU JSON artifacts available under
 
 <!-- BENCH:cross-gpu-contrastive -->
 
-| GPU            | sm    | maxsim step | naive step | speedup |
-| -------------- | ----- | ----------: | ---------: | ------: |
-| A100 SXM4 80GB | sm_80 |    0.338 ms |   3.523 ms |  10.41× |
+| GPU | sm | maxsim step | naive step | speedup |
+| --- | --- | ---: | ---: | ---: |
+| H200 (PTX-JIT) | sm_90 | 0.261 ms | 2.697 ms | 10.33× |
+| A100 SXM4 80GB | sm_80 | 0.378 ms | 4.516 ms | 11.94× |
+| L4 | sm_89 | 0.360 ms | 3.340 ms | 9.28× |
+| A10G | sm_86 | 0.433 ms | 4.086 ms | 9.43× |
+
+<!-- /BENCH -->
+
+### Full H200 benchmark matrix
+
+The full matrix includes every benchmark workload present in the rendered JSON
+artifact.
+
+<!-- BENCH:full-matrix-h200 -->
+
+| Surface | Preset | Shape | dtype | maxsim | PyTorch | speedup | padded | bwd× | peak× | retained state |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | fp16 | 0.261 ms | 2.697 ms | 10.33× | — | 12.86× | 1.27× | 1/80 |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | bf16 | 0.272 ms | 2.704 ms | 9.94× | — | 12.22× | 1.27× | 1/80 |
+| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | fp16 | 0.270 ms | 2.703 ms | 10.01× | — | 25.69× | 2.22× | 1/512 |
+| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | bf16 | 0.263 ms | 2.713 ms | 10.32× | — | 32.21× | 2.22× | 1/512 |
+| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | fp16 | 0.320 ms | 4.906 ms | 15.34× | — | 43.90× | 2.47× | 1/128 |
+| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | bf16 | 0.321 ms | 4.911 ms | 15.30× | — | 44.26× | 2.47× | 1/128 |
+| padded_infer | Rerank | `B=32, K=50, Lq=32, Ld=180, D=128` | fp16 | 0.327 ms | 0.381 ms | 1.17× | — | — | 2.32× | — |
+| padded_infer | Rerank | `B=32, K=50, Lq=32, Ld=180, D=128` | bf16 | 0.338 ms | 0.382 ms | 1.13× | — | — | 2.32× | — |
+| padded_infer | HeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | fp16 | 0.335 ms | 0.826 ms | 2.47× | — | — | 2.89× | — |
+| padded_infer | HeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | bf16 | 0.374 ms | 0.830 ms | 2.22× | — | — | 2.89× | — |
+| packed_infer | PackedRerank | `B=32, K=50, Lq=32, Ld=180, D=128` | fp16 | 5.527 ms | 0.380 ms | 0.07× | 0.328 ms | — | 2.32× | — |
+| packed_infer | PackedRerank | `B=32, K=50, Lq=32, Ld=180, D=128` | bf16 | 5.533 ms | 0.382 ms | 0.07× | 0.338 ms | — | 2.32× | — |
+| packed_infer | PackedHeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | fp16 | 14.640 ms | 0.825 ms | 0.06× | 0.333 ms | — | 2.89× | — |
+| packed_infer | PackedHeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | bf16 | 14.654 ms | 0.830 ms | 0.06× | 0.372 ms | — | 2.89× | — |
 
 <!-- /BENCH -->
 
 ### Full A100 benchmark matrix
 
-The full matrix includes every benchmark workload present in the rendered JSON
-artifact.
-
 <!-- BENCH:full-matrix-a100 -->
 
-| Surface           | Preset      | Shape                                | dtype |   maxsim |  PyTorch | speedup | padded |   bwd× | peak× | retained state |
-| ----------------- | ----------- | ------------------------------------ | ----- | -------: | -------: | ------: | -----: | -----: | ----: | -------------: |
-| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128`  | fp16  | 0.338 ms | 3.523 ms |  10.41× |      — | 16.83× | 1.78× |           1/80 |
-| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128`  | bf16  | 0.340 ms | 3.530 ms |  10.40× |      — | 16.77× | 1.78× |           1/80 |
-| contrastive_train | LongDocs    | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | fp16  | 0.421 ms | 3.499 ms |   8.30× |      — | 33.15× | 3.24× |          1/512 |
-| contrastive_train | LongDocs    | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | bf16  | 0.425 ms | 3.502 ms |   8.24× |      — | 33.12× | 3.24× |          1/512 |
-| contrastive_train | BigBatch    | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | fp16  | 0.500 ms | 6.317 ms |  12.65× |      — | 33.36× | 4.15× |          1/128 |
-| contrastive_train | BigBatch    | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | bf16  | 0.511 ms | 6.302 ms |  12.34× |      — | 33.23× | 4.15× |          1/128 |
+| Surface | Preset | Shape | dtype | maxsim | PyTorch | speedup | padded | bwd× | peak× | retained state |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | fp16 | 0.378 ms | 4.516 ms | 11.94× | — | 18.73× | 1.78× | 1/80 |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | bf16 | 0.378 ms | 4.512 ms | 11.95× | — | 18.66× | 1.78× | 1/80 |
+| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | fp16 | 0.422 ms | 4.517 ms | 10.69× | — | 47.36× | 3.24× | 1/512 |
+| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | bf16 | 0.424 ms | 4.510 ms | 10.64× | — | 48.17× | 3.24× | 1/512 |
+| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | fp16 | 0.505 ms | 8.286 ms | 16.41× | — | 48.09× | 4.15× | 1/128 |
+| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | bf16 | 0.515 ms | 8.260 ms | 16.04× | — | 47.61× | 4.15× | 1/128 |
+| padded_infer | Rerank | `B=32, K=50, Lq=32, Ld=180, D=128` | fp16 | 0.543 ms | 0.961 ms | 1.77× | — | — | 3.01× | — |
+| padded_infer | Rerank | `B=32, K=50, Lq=32, Ld=180, D=128` | bf16 | 0.540 ms | 0.964 ms | 1.79× | — | — | 3.01× | — |
+| padded_infer | HeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | fp16 | 0.592 ms | 2.469 ms | 4.17× | — | — | 3.30× | — |
+| padded_infer | HeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | bf16 | 0.576 ms | 2.475 ms | 4.30× | — | — | 3.30× | — |
+| packed_infer | PackedRerank | `B=32, K=50, Lq=32, Ld=180, D=128` | fp16 | 8.976 ms | 0.961 ms | 0.11× | 0.542 ms | — | 3.01× | — |
+| packed_infer | PackedRerank | `B=32, K=50, Lq=32, Ld=180, D=128` | bf16 | 8.970 ms | 0.964 ms | 0.11× | 0.540 ms | — | 3.01× | — |
+| packed_infer | PackedHeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | fp16 | 24.709 ms | 2.468 ms | 0.10× | 0.589 ms | — | 3.30× | — |
+| packed_infer | PackedHeavyRerank | `B=32, K=100, Lq=32, Ld=256, D=128` | bf16 | 24.718 ms | 2.473 ms | 0.10× | 0.573 ms | — | 3.30× | — |
 
 <!-- /BENCH -->
 

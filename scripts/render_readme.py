@@ -11,6 +11,10 @@ script reads them and rewrites the README sections between marker comments:
         (rendered cross-GPU Contrastive fp16 table)
     <!-- /BENCH -->
 
+    <!-- BENCH:full-matrix-h200 -->
+        (rendered full H200 matrix)
+    <!-- /BENCH -->
+
     <!-- BENCH:full-matrix-a100 -->
         (rendered full A100 matrix)
     <!-- /BENCH -->
@@ -43,12 +47,16 @@ CROSS_GPU_ORDER = [
     ("h200", "H200"),
     ("a100-sxm4-80gb", "A100 SXM4 80GB"),
     ("l40s", "L40S"),
+    ("l4", "L4"),
     ("a10g", "A10G"),
     ("apple-silicon-mps-arm64", "Apple Silicon MPS"),
 ]
 
-# Which GPU's full matrix gets rendered as the full benchmark table.
-FULL_MATRIX_GPU = "a100-sxm4-80gb"
+# Which GPUs get a rendered full benchmark table, keyed by marker name.
+FULL_MATRIX_GPUS = {
+    "full-matrix-h200": "h200",
+    "full-matrix-a100": "a100-sxm4-80gb",
+}
 SURFACE_ORDER = {
     "contrastive_train": 0,
     "padded_infer": 1,
@@ -204,7 +212,10 @@ def main() -> int:
     src = README.read_text()
     renders = [
         ("cross-gpu-contrastive", _render_cross_gpu_contrastive()),
-        ("full-matrix-a100", _render_full_matrix(FULL_MATRIX_GPU)),
+        *[
+            (marker, _render_full_matrix(slug))
+            for marker, slug in FULL_MATRIX_GPUS.items()
+        ],
     ]
 
     for marker, body in renders:
