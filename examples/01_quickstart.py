@@ -3,6 +3,7 @@
 # dependencies = [
 #     "kernels",
 #     "torch",
+#     "numpy"
 # ]
 # ///
 
