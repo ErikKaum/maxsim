@@ -496,6 +496,18 @@ artifact.
 Packed rows compare `score_pairs_packed` against both the equivalent padded
 kernel layout and the PyTorch einsum baseline.
 
+### Apple Silicon (Metal) benchmark matrix
+
+maxsim ships a Metal backend, which (as far as we're aware) makes it the only
+late-interaction MaxSim kernel that runs natively on Apple Silicon. The same
+workloads as above, measured on the MPS build against the same naive PyTorch
+baseline. Peak-memory figures aren't captured on MPS, so the `peak×` column
+shows `—`.
+
+<!-- BENCH:full-matrix-metal -->
+
+<!-- /BENCH -->
+
 ### Reproducing
 
 ```bash

@@ -153,17 +153,27 @@ cuda-bench-matrix flavor="a100-large" repeats="1" iters="30" warmup="5": cuda-sy
         -e MAXSIM_BENCH_GIT_DIRTY="$DIRTY" \
         -v {{cuda_bucket}}:/kernels \
         {{cuda_image}} \
-        python /kernels/{{cuda_prefix}}/scripts/cuda_bench_matrix.py
+        python /kernels/{{cuda_prefix}}/scripts/bench_matrix.py
 
 # Run the benchmark matrix on Apple Silicon through the Metal/MPS build.
 bench-matrix-metal repeats="1" iters="30" warmup="5":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+      DIRTY=true
+    else
+      DIRTY=false
+    fi
     nix develop .#test -c env \
         MAXSIM_BENCH_METAL=true \
         MAXSIM_BENCH_REPO=. \
         MAXSIM_BENCH_REPEATS={{repeats}} \
         MAXSIM_BENCH_ITERS={{iters}} \
         MAXSIM_BENCH_WARMUP={{warmup}} \
-        python scripts/cuda_bench_matrix.py
+        MAXSIM_BENCH_COMMIT="$COMMIT" \
+        MAXSIM_BENCH_GIT_DIRTY="$DIRTY" \
+        python scripts/bench_matrix.py
 
 # ---------------------------------------------------------------------------
 # CUDA release artifacts.

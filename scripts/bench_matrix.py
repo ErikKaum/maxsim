@@ -655,7 +655,6 @@ def main() -> int:
     if not repo.is_dir():
         repo = Path.cwd()
     os.chdir(repo)
-    _ensure("ninja")
 
     import torch
 
@@ -700,6 +699,10 @@ def main() -> int:
     print(f"[cuda_bench_matrix] commit  = {git_commit}{' (dirty)' if git_dirty else ''}")
 
     if DEVICE == "cuda":
+        # CUDA JIT-compiles maxsim.cu via torch.utils.cpp_extension, which needs
+        # ninja. Metal loads the prebuilt build/ tree instead, so it has no such
+        # dependency — keep the install out of the Metal path.
+        _ensure("ninja")
         _setup_bridge(repo)
     else:
         _setup_metal_import(repo)

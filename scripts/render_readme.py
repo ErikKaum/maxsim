@@ -19,6 +19,10 @@ script reads them and rewrites the README sections between marker comments:
         (rendered full A100 matrix)
     <!-- /BENCH -->
 
+    <!-- BENCH:full-matrix-metal -->
+        (rendered full Apple Silicon / Metal matrix)
+    <!-- /BENCH -->
+
 Run with::
 
     just bench-render
@@ -34,7 +38,6 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Iterable
 
 REPO = Path(__file__).resolve().parent.parent
 BENCH_DIR = REPO / "bench_results" / "v2"
@@ -43,19 +46,24 @@ README = REPO / "README.md"
 # GPUs we expect to find in the cross-GPU table, in display order. Slug must
 # match what `cuda_bench_matrix._slugify_gpu` produces for that GPU's
 # `gpu_name` (vendor prefix stripped, lowercased, non-alnum → "-").
+# CUDA GPUs in the cross-GPU table, in display order. Slug must match what
+# `cuda_bench_matrix._slugify_gpu` produces for that GPU's `gpu_name` (vendor
+# prefix stripped, lowercased, non-alnum → "-"). Metal is intentionally absent:
+# it has no `sm` and gets its own full-matrix table instead.
 CROSS_GPU_ORDER = [
     ("h200", "H200"),
     ("a100-sxm4-80gb", "A100 SXM4 80GB"),
     ("l40s", "L40S"),
     ("l4", "L4"),
     ("a10g", "A10G"),
-    ("apple-silicon-mps-arm64", "Apple Silicon MPS"),
 ]
 
-# Which GPUs get a rendered full benchmark table, keyed by marker name.
+# Which devices get a rendered full benchmark table, keyed by marker name.
+# Each artifact must exist; a missing one is an error.
 FULL_MATRIX_GPUS = {
     "full-matrix-h200": "h200",
     "full-matrix-a100": "a100-sxm4-80gb",
+    "full-matrix-metal": "apple-silicon-mps-arm64",
 }
 SURFACE_ORDER = {
     "contrastive_train": 0,
