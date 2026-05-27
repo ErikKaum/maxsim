@@ -1,6 +1,18 @@
-![maxsim](assets/maxsim.png)
+<div align="center">
 
 # MaxSim
+
+<img src="assets/maxsim.png" alt="maxsim banner" />
+
+---
+
+[[Install]](#install) [[Common workflows]](#common-workflows)
+[[Reference]](#reference) [[Example scripts]](#example-scripts)
+[[Benchmarks]](#benchmarks)
+
+</div>
+
+## Introduction
 
 A fast, memory-efficient exact MaxSim kernel for ColBERT-style late-interaction
 retrieval and training. It's a drop-in replacement for PyTorch's MaxSim that's
@@ -136,8 +148,8 @@ d2   ■  ■  ■  ... □   □       □      64 tokens
 □ = padding
 ```
 
-Instead, contrastive mode packs only the real document token embeddings into
-one flat tensor:
+Instead, contrastive mode packs only the real document token embeddings into one
+flat tensor:
 
 ```text
 documents: [total_d_tokens, dim]
@@ -386,8 +398,8 @@ under [`bench_results/v2/`](./bench_results/v2/).
 ### ColBERT training on A100
 
 The headline workload uses a common ColBERT-style in-batch contrastive shape:
-`Nq=Nb=32, Lq=32, Ld=80, dim=128`. **10.3× faster training step, with
-1/80th the retained backward state.**
+`Nq=Nb=32, Lq=32, Ld=80, dim=128`. **10.3× faster training step, with 1/80th the
+retained backward state.**
 
 | dtype | maxsim step | naive step | full step× | bwd alone× | peak mem× | retained state |
 | ----- | ----------: | ---------: | ---------: | ---------: | --------: | -------------: |
@@ -408,12 +420,12 @@ maxsim retained state = 1/Ld of naive
 ```
 
 |   Ld | naive retained | maxsim retained | maxsim / naive |
-| ---: | -------------: | --------------: | --------: |
-|   75 |         9.8 MB |         0.13 MB |      1/75 |
-|  128 |        16.8 MB |         0.13 MB |     1/128 |
-|  256 |        33.6 MB |         0.13 MB |     1/256 |
-|  512 |        67.1 MB |         0.13 MB |     1/512 |
-| 1024 |       134.2 MB |         0.13 MB |    1/1024 |
+| ---: | -------------: | --------------: | -------------: |
+|   75 |         9.8 MB |         0.13 MB |           1/75 |
+|  128 |        16.8 MB |         0.13 MB |          1/128 |
+|  256 |        33.6 MB |         0.13 MB |          1/256 |
+|  512 |        67.1 MB |         0.13 MB |          1/512 |
+| 1024 |       134.2 MB |         0.13 MB |         1/1024 |
 
 ### Cross-Device Contrastive fp16
 
@@ -422,9 +434,9 @@ This table is rendered from the GPU JSON artifacts available under
 
 <!-- BENCH:cross-gpu-contrastive -->
 
-| GPU | sm | maxsim step | naive step | speedup |
-| --- | --- | ---: | ---: | ---: |
-| A100 SXM4 80GB | sm_80 | 0.338 ms | 3.523 ms | 10.41× |
+| GPU            | sm    | maxsim step | naive step | speedup |
+| -------------- | ----- | ----------: | ---------: | ------: |
+| A100 SXM4 80GB | sm_80 |    0.338 ms |   3.523 ms |  10.41× |
 
 <!-- /BENCH -->
 
@@ -435,14 +447,14 @@ artifact.
 
 <!-- BENCH:full-matrix-a100 -->
 
-| Surface | Preset | Shape | dtype | maxsim | PyTorch | speedup | padded | bwd× | peak× | retained state |
-| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | fp16 | 0.338 ms | 3.523 ms | 10.41× | — | 16.83× | 1.78× | 1/80 |
-| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128` | bf16 | 0.340 ms | 3.530 ms | 10.40× | — | 16.77× | 1.78× | 1/80 |
-| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | fp16 | 0.421 ms | 3.499 ms | 8.30× | — | 33.15× | 3.24× | 1/512 |
-| contrastive_train | LongDocs | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | bf16 | 0.425 ms | 3.502 ms | 8.24× | — | 33.12× | 3.24× | 1/512 |
-| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | fp16 | 0.500 ms | 6.317 ms | 12.65× | — | 33.36× | 4.15× | 1/128 |
-| contrastive_train | BigBatch | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | bf16 | 0.511 ms | 6.302 ms | 12.34× | — | 33.23× | 4.15× | 1/128 |
+| Surface           | Preset      | Shape                                | dtype |   maxsim |  PyTorch | speedup | padded |   bwd× | peak× | retained state |
+| ----------------- | ----------- | ------------------------------------ | ----- | -------: | -------: | ------: | -----: | -----: | ----: | -------------: |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128`  | fp16  | 0.338 ms | 3.523 ms |  10.41× |      — | 16.83× | 1.78× |           1/80 |
+| contrastive_train | Contrastive | `Nq=32, Nb=32, Lq=32, Ld=80, D=128`  | bf16  | 0.340 ms | 3.530 ms |  10.40× |      — | 16.77× | 1.78× |           1/80 |
+| contrastive_train | LongDocs    | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | fp16  | 0.421 ms | 3.499 ms |   8.30× |      — | 33.15× | 3.24× |          1/512 |
+| contrastive_train | LongDocs    | `Nq=32, Nb=32, Lq=32, Ld=512, D=128` | bf16  | 0.425 ms | 3.502 ms |   8.24× |      — | 33.12× | 3.24× |          1/512 |
+| contrastive_train | BigBatch    | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | fp16  | 0.500 ms | 6.317 ms |  12.65× |      — | 33.36× | 4.15× |          1/128 |
+| contrastive_train | BigBatch    | `Nq=64, Nb=64, Lq=32, Ld=128, D=128` | bf16  | 0.511 ms | 6.302 ms |  12.34× |      — | 33.23× | 4.15× |          1/128 |
 
 <!-- /BENCH -->
 
@@ -460,9 +472,9 @@ just bench-render                        # regenerate README tables from JSON
 ```
 
 The CUDA bench recipe submits an HF Jobs run; `bench-matrix-metal` runs the same
-matrix against the Metal/MPS build. Both write one JSON artifact per device class to
-[`bench_results/v2/`](./bench_results/v2/). The artifacts capture the kernel
-commit, device/torch/CUDA versions, timing + variance per workload, and a
+matrix against the Metal/MPS build. Both write one JSON artifact per device
+class to [`bench_results/v2/`](./bench_results/v2/). The artifacts capture the
+kernel commit, device/torch/CUDA versions, timing + variance per workload, and a
 structured shape per row. `just bench-render` rewrites the tables above from
 those JSONs — same data, no copy-paste drift.
 
@@ -490,18 +502,21 @@ below.
 - Metal handles arbitrary `Lq` for padded and contrastive paths. Its
   `simdgroup_matrix` path fires when `dim % 8 == 0`; otherwise it uses scalar
   work. Very large `Lq * dim` shapes can hit Metal threadgroup-memory limits.
-- Packed-form training uses a scalar argmax kernel rather than a WMMA argmax
-  path. For fixed-`K` reranking, prefer the padded API.
+- Packed CUDA paths are scalar today: `score_pairs_packed` uses a scalar
+  score-only kernel, and packed training uses scalar argmax/backward kernels
+  rather than WMMA. Which means that there isn't really a performance win over
+  native PyTorch. Use packed for arbitrary or sparse pair grids; for fixed-`K`
+  reranking, prefer the padded API.
 - Backward kernels accumulate gradients with fp32 atomics. The results are
   numerically stable for training, but not bit-exact deterministic across
   repeated backward passes because floating-point additions can arrive in a
   different order.
 - NaN inputs do not follow PyTorch's exact `torch.max` NaN propagation
-  semantics. Kernel comparisons use `v > max`, so NaN candidates are skipped.
-  A NaN in a query token usually drives the whole score for that pair to `-inf`;
-  a NaN in one document token may simply be ignored if another document token
-  wins the max. Treat non-finite encoder outputs as upstream bugs and pre-screen
-  with `torch.isfinite(...)` if you need strict behavior.
+  semantics. Kernel comparisons use `v > max`, so NaN candidates are skipped. A
+  NaN in a query token usually drives the whole score for that pair to `-inf`; a
+  NaN in one document token may simply be ignored if another document token wins
+  the max. Treat non-finite encoder outputs as upstream bugs and pre-screen with
+  `torch.isfinite(...)` if you need strict behavior.
 - Hopper (`sm_90`) currently runs via PTX forward compatibility. Native WGMMA
   tuning is future work.
 
