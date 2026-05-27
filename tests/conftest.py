@@ -24,9 +24,46 @@ def _detect_torch_variant_tag() -> str:
     return torch_token
 
 
+def _detect_cuda_variant_tag() -> str | None:
+    cuda_version = torch.version.cuda
+    if cuda_version is None:
+        return None
+    major_minor = cuda_version.split(".")[:2]
+    if len(major_minor) != 2:
+        return None
+    return "cu" + "".join(major_minor)
+
+
+def _requires_built_variant() -> bool:
+    return os.environ.get("MAXSIM_REQUIRE_BUILT_VARIANT", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _find_variant_dir() -> Path | None:
     repo_root = Path(__file__).resolve().parent.parent
     torch_tag = _detect_torch_variant_tag()
+    cuda_tag = _detect_cuda_variant_tag()
+    require_exact_cuda = _requires_built_variant() and cuda_tag is not None
+
+    # `just test` runs inside `nix develop .#test`, where PYTHONPATH points at
+    # the freshly built package in /nix/store. Prefer that over a possibly stale
+    # local ./build copy. `just test-full` sets MAXSIM_REQUIRE_BUILT_VARIANT=1
+    # and intentionally exercises ./build or ./result instead.
+    if not _requires_built_variant():
+        for entry in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+            if not entry:
+                continue
+            path = Path(entry)
+            if (
+                path.exists()
+                and path.name.startswith(torch_tag)
+                and "maxsim-torch-ext" in str(path)
+            ):
+                return path
 
     # Probe (1) `build/` (the user's convention for kernel-builder copies) and
     # (2) `result/` (nix build symlink), in that order.
@@ -34,8 +71,15 @@ def _find_variant_dir() -> Path | None:
         build_dir = repo_root / build_dir_name
         if not build_dir.exists():
             continue
-        # Prefer an exact torch match, otherwise any metal/* variant.
-        candidates = sorted(build_dir.glob(f"{torch_tag}-*"))
+        # Prefer an exact torch+CUDA match when testing a CUDA PyTorch build,
+        # otherwise fall back to exact torch, then any Metal variant.
+        candidates = []
+        if cuda_tag is not None:
+            candidates = sorted(build_dir.glob(f"{torch_tag}-*{cuda_tag}-*"))
+            if require_exact_cuda and not candidates:
+                continue
+        if not candidates:
+            candidates = sorted(build_dir.glob(f"{torch_tag}-*"))
         if not candidates:
             candidates = sorted(build_dir.glob("torch*-metal-*"))
         if candidates:
@@ -47,6 +91,15 @@ _variant_dir = _find_variant_dir()
 if _variant_dir is not None:
     sys.path.insert(0, str(_variant_dir))
     os.environ.setdefault("MAXSIM_KERNEL_VARIANT", str(_variant_dir))
+elif _requires_built_variant():
+    torch_tag = _detect_torch_variant_tag()
+    cuda_tag = _detect_cuda_variant_tag()
+    expected = f"{torch_tag}-*{cuda_tag}-*" if cuda_tag is not None else f"{torch_tag}-*"
+    raise RuntimeError(
+        "MAXSIM_REQUIRE_BUILT_VARIANT is set, but no matching kernel variant "
+        f"({expected}) was found under ./build or ./result. Run `just build` or "
+        "`kernel-builder build-and-copy -L` before this test path."
+    )
 elif torch.cuda.is_available():
     # CUDA dev mode (HF Jobs): no nix variant in build/result, but we have
     # a GPU. Build the extension via torch.utils.cpp_extension and bridge
@@ -81,6 +134,13 @@ elif torch.cuda.is_available():
     _fake_ops.ops = types.SimpleNamespace(
         maxsim_forward=_ext.maxsim_forward,
         maxsim_padded_forward=_ext.maxsim_padded_forward,
+        maxsim_padded_forward_with_argmax=_ext.maxsim_padded_forward_with_argmax,
+        maxsim_padded_backward=_ext.maxsim_padded_backward,
+        maxsim_packed_forward_with_argmax=_ext.maxsim_packed_forward_with_argmax,
+        maxsim_packed_backward=_ext.maxsim_packed_backward,
+        maxsim_contrastive_forward=_ext.maxsim_contrastive_forward,
+        maxsim_contrastive_forward_with_argmax=_ext.maxsim_contrastive_forward_with_argmax,
+        maxsim_contrastive_backward=_ext.maxsim_contrastive_backward,
     )
     sys.modules["maxsim._ops"] = _fake_ops
     os.environ.setdefault("MAXSIM_KERNEL_VARIANT", f"cuda-dev-sm_{_sm}")

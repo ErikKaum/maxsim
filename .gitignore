@@ -38,6 +38,7 @@ env/
 
 # Logs / scratch
 *.log
+/fine-tuned-LateOn-scifact/
 
 # Dev-only state, never published
 /plan.md

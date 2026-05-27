@@ -1,4 +1,4 @@
-"""Correctness of the ergonomic padded wrapper."""
+"""Correctness of the padded API."""
 
 from __future__ import annotations
 

@@ -22,24 +22,26 @@ rm -rf build result result-*
 # tree has no .git, so initialise a throwaway one here. The hash from
 # this commit becomes the build's unique tag.
 echo "[cuda_release] init throwaway git repo for kernel-builder hashing"
-nix-env -iA nixpkgs.git
+if ! command -v git >/dev/null 2>&1; then
+  nix-env -iA nixpkgs.git
+fi
 git init -q
 git -c user.email=ci@local -c user.name=ci add -A
 git -c user.email=ci@local -c user.name=ci commit -q -m "release build"
 
 # Enable flakes / new nix command (the nixos/nix image keeps them gated by
 # default). Then bring in cachix + configure the HuggingFace binary cache
-# so we don't recompile pytorch / cuda toolkits from scratch. Also turn
-# off the sandbox + seccomp syscall filter -- needed when running this
-# script under Docker + x86 emulation on M-series (QEMU can't translate
-# the BPF program nix loads). Harmless on a native x86_64 host.
+# so we don't recompile pytorch / cuda toolkits from scratch. Keep Nix
+# sandboxing enabled by default: current kernel-builder requires it on Linux.
+# Local Docker/QEMU builds can pass NIX_SANDBOX=false.
+NIX_SANDBOX="${NIX_SANDBOX:-true}"
 mkdir -p /etc/nix
 cat > /etc/nix/nix.conf <<EOF
 experimental-features = nix-command flakes
 trusted-users = root
 substituters = https://cache.nixos.org https://huggingface.cachix.org
 trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o=
-sandbox = false
+sandbox = $NIX_SANDBOX
 filter-syscalls = false
 EOF
 

@@ -5,7 +5,7 @@ backends = [
   "cuda",
   "metal",
 ]
-version = 1
+version = 2
 
 [general.hub]
 repo-id = "erikkaum/maxsim"

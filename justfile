@@ -1,4 +1,4 @@
-# Convenience runner for the maxsim Metal kernel.
+# Convenience runner for maxsim development, tests, releases, and benchmarks.
 # Install `just` once: https://github.com/casey/just  (or: brew install just)
 # Run `just` (no args) to see this list.
 
@@ -14,19 +14,16 @@ build:
 
 # Run the full pytest suite inside the kernel-builder test shell.
 test *args:
-    nix develop .#test -c python -m pytest tests/ {{args}}
+    nix develop .#test -c python -m pytest {{args}}
 
-# Run the smoke-test example against the locally built kernel.
-example:
-    nix develop .#test -c python example.py
+# Build local release variants, then test the packaged kernel path.
+test-full *args: build
+    nix develop .#test -c env MAXSIM_REQUIRE_BUILT_VARIANT=1 python -m pytest {{args}}
 
-# Benchmark vs naive baseline on the published {{repo_id}} (run `just upload` first).
-benchmark *args:
-    nix develop .#test -c kernels benchmark {{repo_id}} {{args}}
-
-# Benchmark vs naive baseline using the locally built kernel in ./build.
-bench-local *args:
-    nix develop .#test -c python benchmarks/run_local.py {{args}}
+# Run an example from ./examples/ by its numeric prefix.
+# E.g. `just example 01`, `just example 03`. List with `ls examples/`.
+example NUM:
+    nix develop .#test -c python examples/{{NUM}}_*.py
 
 # Open an interactive test shell (torch + pytest + kernel on PYTHONPATH).
 shell:
@@ -54,7 +51,7 @@ clean:
         torch-ext/maxsim/__pycache__ benchmarks/__pycache__
 
 # ---------------------------------------------------------------------------
-# CUDA dev loop (HF Jobs).
+# CUDA workflows (HF Jobs).
 #
 # Sources are synced to the `erikkaum/kernels` HF bucket under a `maxsim/`
 # prefix. The job mounts the whole bucket at /kernels and runs the dev
@@ -64,6 +61,7 @@ clean:
 cuda_bucket := "hf://buckets/erikkaum/kernels"
 cuda_prefix := "maxsim"
 cuda_image  := "pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel"
+cuda_full_test_image := "pytorch/pytorch:2.12.0-cuda12.6-cudnn9-devel"
 
 # Push local sources to the bucket (rsync-style, only changed files).
 cuda-sync:
@@ -86,28 +84,79 @@ cuda-sync:
         --exclude '.hypothesis' --exclude '.hypothesis/*' \
         --exclude '*.log'
 
-# Smoke-test the CUDA dev loop on HF Jobs.
+# Build the CUDA dev bridge in the job, then run pytest in one shot.
+# This uses tests/conftest.py's torch.utils.cpp_extension path, not packaged
+# kernel-builder variants.
 # Usage: just cuda-dev               (a10g-small / sm_86)
 #        just cuda-dev l4x1          (Lovelace / sm_89)
 #        just cuda-dev a100-large    (sm_80)
-cuda-dev flavor="a10g-small": cuda-sync
+cuda-test-dev flavor="a10g-small": cuda-sync
     uvx hf jobs run \
         --flavor {{flavor}} \
         --timeout 30m \
         --secrets HF_TOKEN \
         -v {{cuda_bucket}}:/kernels \
         {{cuda_image}} \
-        python /kernels/{{cuda_prefix}}/scripts/cuda_dev.py
+        python /kernels/{{cuda_prefix}}/scripts/cuda_test_dev.py
 
-# Benchmark vs naive baseline on HF Jobs.
-cuda-bench flavor="a10g-small": cuda-sync
+# Test previously full-built CUDA artifacts from /kernels/maxsim-build in a
+# PyTorch CUDA image. Run after `just cuda-release`.
+cuda-test-packaged flavor="a100-large" image=cuda_full_test_image: cuda-sync
     uvx hf jobs run \
         --flavor {{flavor}} \
-        --timeout 30m \
+        --timeout 45m \
         --secrets HF_TOKEN \
         -v {{cuda_bucket}}:/kernels \
+        {{image}} \
+        python /kernels/{{cuda_prefix}}/scripts/cuda_test_packaged.py
+
+# ---------------------------------------------------------------------------
+# Benchmarks.
+#
+# The benchmark runner writes JSON artifacts under bench_results/v2/. The
+# renderer is the only thing that edits README.md tables.
+# ---------------------------------------------------------------------------
+
+# Render README.md benchmark tables from bench_results/v2/*.json.
+bench-render:
+    python3 scripts/render_readme.py
+
+# Run the benchmark matrix on a CUDA GPU through HF Jobs.
+cuda-bench-matrix flavor="a100-large" repeats="1" iters="30" warmup="5": cuda-sync
+    #!/usr/bin/env bash
+    set -euo pipefail
+    COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+      DIRTY=true
+    else
+      DIRTY=false
+    fi
+    uvx hf jobs run \
+        --flavor {{flavor}} \
+        --timeout 60m \
+        --secrets HF_TOKEN \
+        -e MAXSIM_BENCH_REPEATS={{repeats}} \
+        -e MAXSIM_BENCH_ITERS={{iters}} \
+        -e MAXSIM_BENCH_WARMUP={{warmup}} \
+        -e MAXSIM_BENCH_COMMIT="$COMMIT" \
+        -e MAXSIM_BENCH_GIT_DIRTY="$DIRTY" \
+        -v {{cuda_bucket}}:/kernels \
         {{cuda_image}} \
-        python /kernels/{{cuda_prefix}}/scripts/cuda_bench.py
+        python /kernels/{{cuda_prefix}}/scripts/cuda_bench_matrix.py
+
+# Run the benchmark matrix on Apple Silicon through the Metal/MPS build.
+bench-matrix-metal repeats="1" iters="30" warmup="5":
+    nix develop .#test -c env \
+        MAXSIM_BENCH_METAL=true \
+        MAXSIM_BENCH_REPO=. \
+        MAXSIM_BENCH_REPEATS={{repeats}} \
+        MAXSIM_BENCH_ITERS={{iters}} \
+        MAXSIM_BENCH_WARMUP={{warmup}} \
+        python scripts/cuda_bench_matrix.py
+
+# ---------------------------------------------------------------------------
+# CUDA release artifacts.
+# ---------------------------------------------------------------------------
 
 # Build all CUDA release variants on HF Jobs (via Nix + kernel-builder).
 # Writes per-variant build/ trees into the bucket at maxsim-build/ so the
@@ -127,7 +176,7 @@ cuda-release flavor="cpu-upgrade": cuda-sync
 cuda-pull:
     uvx hf buckets sync {{cuda_bucket}}/maxsim-build ./build
 
-# Local fallback: build CUDA variants via Docker + linux/amd64 emulation.
+# Local Docker build for CUDA variants via linux/amd64 emulation.
 # Slow (QEMU emulation of x86_64 on M-series) but doesn't depend on HF
 # Jobs queue capacity. Output lands directly in ./build-cuda/ for merging.
 cuda-release-local:
@@ -138,6 +187,7 @@ cuda-release-local:
         --name maxsim-cuda-build \
         --security-opt seccomp=unconfined \
         --privileged \
+        -e NIX_SANDBOX=false \
         -v $(pwd):/kernels/maxsim:ro \
         -v $(pwd)/build-cuda:/kernels/maxsim-build \
         nixos/nix:latest \
@@ -148,6 +198,6 @@ cuda-release-local-logs:
     docker logs maxsim-cuda-build 2>&1 | tail -80
     docker rm maxsim-cuda-build 2>/dev/null || true
 
-# Merge ./build-cuda/ (local Docker fallback output) into ./build/.
+# Merge ./build-cuda/ (local Docker output) into ./build/.
 cuda-merge-local:
     cp -r ./build-cuda/* ./build/
